@@ -4,9 +4,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class MyStrategy {
-    public static final int DEFAUILT_CONSTRUCTION_SIZE = 5;
-    public static final int HOUSE_SIZE = 3;
-    public static final int SUPPLY_BUILD_SIZE = 5;
+
     static List<Entity> resources = new ArrayList<>();
 
     public Action getAction(PlayerView playerView, DebugInterface debugInterface) {
@@ -19,45 +17,35 @@ public class MyStrategy {
         List<Entity> myMelle = new ArrayList<>();
         List<Entity> myRangers = new ArrayList<>();
         List<Entity> myBuilders = new ArrayList<>();
-        List<Entity> myBuilderBases = new ArrayList<>();
-        List<Entity> myRangeBases = new ArrayList<>();
-        List<Entity> myMelleBases = new ArrayList<>();
-        List<Entity> myHouses = new ArrayList<>();
+        MyBuildings myBuildings = new MyBuildings();
         Entity[] entities = playerView.getEntities();
         resources = Arrays.stream(entities).filter(e -> e.getEntityType() == EntityType.RESOURCE).collect(Collectors.toList());
         List<Entity> myEntities = Arrays.stream(entities).filter(e -> e.getPlayerId() != null).filter(e -> e.getPlayerId() == myId).collect(Collectors.toList());
         List<Entity> enemyEntities = Arrays.stream(entities).filter(e -> e.getPlayerId() != null).filter(e -> e.getPlayerId() != myId).collect(Collectors.toList());
 
-        fillMyArmyAndMyBuildings(myMelle, myRangers, myBuilders, myEntities, myBuilderBases, myMelleBases, myHouses, myRangeBases);
+        fillMyArmyAndMyBuildings(myMelle, myRangers, myBuilders, myEntities, myBuildings.myBuilderBases, myBuildings.myMelleBases, myBuildings.myHouses, myBuildings.myRangeBases);
         for (var builder : myBuilders) {
             var moveAction = new MoveAction(getNearestEntityPosition(builder, resources), true, true);
             var entityAction = new EntityAction();
             entityAction.setMoveAction(moveAction);
             entityActions.put(builder.getId(), entityAction);
         }
-        var vertices = new ColoredVertex[]{
-                new ColoredVertex(
-                        new Vec2Float(2f, 2f),
-                        new Vec2Float(0.5f, -0.5f),
-                        new Color(100, 0, 0, 100))
-        };
-        var cock = new DebugData.Primitives(vertices,PrimitiveType.LINES);
-        DebugCommand.Add debugCommand = new DebugCommand.Add();
-        debugCommand.setData(cock);
+        BuildingScheduler buildingScheduler = new BuildingScheduler(resources, myBuildings.getAllMyBuildings());
+
         if (myRes >= 50) {
-            Random rand = new Random(myBuilders.size() - 1);
-            Entity houseBuilder = myBuilders.get(rand.nextInt());
+            int i = rnd(0, myBuilders.size() - 1);
+            Entity houseBuilder = myBuilders.get(i);
             EntityAction entityAction = entityActions.get(houseBuilder.getId());
-            BuildAction buildAction = new BuildAction(EntityType.HOUSE, new Vec2Int(2, 2));
+
+            Vec2Int emptyPlaceForBuild = buildingScheduler.getEmptyPlaceForBuild(EntityType.HOUSE);
+            BuildAction buildAction = new BuildAction(EntityType.HOUSE, emptyPlaceForBuild);
             entityAction.setMoveAction(new MoveAction(new Vec2Int(5, 6), false, false));
             entityAction.setBuildAction(buildAction);
-
-
         }
 
         //TODO: нужно условие для постройки
-        int supplyBlock = (myBuilderBases.size() + myMelleBases.size() + myHouses.size() + myRangeBases.size()) * SUPPLY_BUILD_SIZE;
-        buildUnitMacro(entityActions, currentTick, myBuilders, myBuilderBases, myRangeBases, myMelleBases, supplyBlock);
+        int supplyBlock = (myBuildings.myBuilderBases.size() + myBuildings.myMelleBases.size() + myBuildings.myHouses.size() + myBuildings.myRangeBases.size()) * EXPERT_CONSTANT.SUPPLY_BUILD_SIZE;
+        buildUnitMacro(entityActions, currentTick, myBuilders, myBuildings.myBuilderBases, myBuildings.myRangeBases, myBuildings.myMelleBases, supplyBlock);
         setArmyTargets(entityActions, myMelle, myRangers, enemyEntities);
 
         return new Action(entityActions);
@@ -73,13 +61,18 @@ public class MyStrategy {
         return myRes;
     }
 
+    public static int rnd(int min, int max) {
+        int diapason = max + Math.abs(min) + 1;
+        return (int) (Math.random() * diapason) - max;
+    }
+
     private void buildUnitMacro(HashMap<Integer, EntityAction> entityActions, int currentTick, List<Entity> myBuilders, List<Entity> myBuilderBases, List<Entity> myRangeBases, List<Entity> myMelleBases, int supplyBlock) {
         if (myBuilders.size() <= (3f / 10) * supplyBlock) {
             for (var builderBase : myBuilderBases) {
                 var entityAction = new EntityAction();
                 var buildAction = new BuildAction();
                 buildAction.setEntityType(EntityType.BUILDER_UNIT);
-                buildAction.setPosition(new Vec2Int(builderBase.getPosition().getX() + DEFAUILT_CONSTRUCTION_SIZE, builderBase.getPosition().getY() + 5 - 1));
+                buildAction.setPosition(new Vec2Int(builderBase.getPosition().getX() + EXPERT_CONSTANT.DEFAUILT_CONSTRUCTION_SIZE, builderBase.getPosition().getY() + 5 - 1));
 
                 entityAction.setBuildAction(buildAction);
                 entityActions.put(builderBase.getId(), entityAction);
@@ -91,23 +84,23 @@ public class MyStrategy {
             }
         }
 
-        if (currentTick >= 40) {
+        if (currentTick >= 50) {
             for (var rangeBase : myRangeBases) {
                 var entityAction = new EntityAction();
                 var buildAction = new BuildAction();
                 buildAction.setEntityType(EntityType.RANGED_UNIT);
-                buildAction.setPosition(new Vec2Int(rangeBase.getPosition().getX() + DEFAUILT_CONSTRUCTION_SIZE, rangeBase.getPosition().getY() + 5 - 1));
+                buildAction.setPosition(new Vec2Int(rangeBase.getPosition().getX() + EXPERT_CONSTANT.DEFAUILT_CONSTRUCTION_SIZE, rangeBase.getPosition().getY() + 5 - 1));
                 entityAction.setBuildAction(buildAction);
                 entityActions.put(rangeBase.getId(), entityAction);
             }
         }
 
-        if (currentTick >= 40) {
+        if (currentTick >= 50) {
             for (var melleBase : myMelleBases) {
                 var entityAction = new EntityAction();
                 var buildAction = new BuildAction();
                 buildAction.setEntityType(EntityType.MELEE_UNIT);
-                buildAction.setPosition(new Vec2Int(melleBase.getPosition().getX() + DEFAUILT_CONSTRUCTION_SIZE, melleBase.getPosition().getY() + 5 - 1));
+                buildAction.setPosition(new Vec2Int(melleBase.getPosition().getX() + EXPERT_CONSTANT.DEFAUILT_CONSTRUCTION_SIZE, melleBase.getPosition().getY() + 5 - 1));
                 entityAction.setBuildAction(buildAction);
                 entityActions.put(melleBase.getId(), entityAction);
             }
@@ -224,6 +217,20 @@ public class MyStrategy {
 
     public void debugUpdate(PlayerView playerView, DebugInterface debugInterface) {
         debugInterface.send(new DebugCommand.Clear());
+/*        var vertices = new ColoredVertex[]{
+                new ColoredVertex(
+                        new Vec2Float(2f, 2f),
+                        new Vec2Float(0.5f, -0.5f),
+                        new Color(100, 0, 0, 100)),
+                new ColoredVertex(
+                        new Vec2Float(4f, 4f),
+                        new Vec2Float(0.5f, -0.5f),
+                        new Color(100, 0, 0, 100)),
+        };
+        var cock = new DebugData.Primitives(vertices,PrimitiveType.LINES);
+        DebugCommand.Add debugCommand = new DebugCommand.Add();
+        debugCommand.setData(cock);
+        debugInterface.send(debugCommand);*/
         debugInterface.getState();
     }
 }

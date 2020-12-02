@@ -2,6 +2,8 @@ package model;
 
 import util.StreamUtil;
 
+import java.util.Objects;
+
 public class Vec2Int {
     private int x;
     public int getX() { return x; }
@@ -14,6 +16,21 @@ public class Vec2Int {
         this.x = x;
         this.y = y;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Vec2Int vec2Int = (Vec2Int) o;
+        return x == vec2Int.x &&
+                y == vec2Int.y;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(x, y);
+    }
+
     public static Vec2Int readFrom(java.io.InputStream stream) throws java.io.IOException {
         Vec2Int result = new Vec2Int();
         result.x = StreamUtil.readInt(stream);
